@@ -2,9 +2,11 @@
 
 neat.js is a JavaScript library for the browser but usable with node.js with a few tweaks. It can be used to create neural networks those shape can evolve. The library also contains some methods for visualizing the network.
 
-## Principles
+## How does it work ?
 
-Regular neural networks 
+Neat manages neural networks represented as graphs that can evolve. Neat starts with a few simple networks with few nodes and edges and mutates them and selects the one with the best performance based on training data. As the complexity of the network increases, their performance improves.
+
+The networks can perform almost any computation with the right training. Neat is designed to help interesting mutation prosper in the network population to promote genetic innovations.
 
 ## Getting started
 
@@ -34,3 +36,10 @@ Note that **neatjs** has strict no dependencies policy. You can just download `n
 - Add the ability to zoom with the mouse and move the camera when rendering the network
 - Add the ability to set the layout of a network to a classic set of layers
 - Add better support for recursion (an output is an input of the network.)
+
+## More about neat
+
+More reading on the topic.
+
+- https://en.wikipedia.org/wiki/Neuroevolution_of_augmenting_topologies
+- https://www.mitpressjournals.org/doi/abs/10.1162/106365602320169811
