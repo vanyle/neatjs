@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>NEAT - A single network</title>
+	<script type="text/javascript" src="../neat.js"></script>
+	<style>
+		canvas{
+			border:1px solid white;
+			margin:10px;
+		}
+		#canvas{
+			width:600px;
+			height:300px;
+		}
+		#canvas2{
+			height:400px;
+			width:400px;
+		}
+		/* Some nice fancy style for the demo */
+		*{
+			font-family: Helvetica;
+			box-sizing: border-box;
+		}
+		body,html{
+			background-color:black;
+			color:white;
+		}
+		button{
+			display:inline-block;
+			text-align:center;
+			padding:10px 10px;
+			margin:0 10px;
+			border: 2px solid white;
+			border-radius: 2px;
+			text-decoration:none;
+			color:white;
+			cursor: pointer;
+			font-size:30px;
+			background-color:transparent;
+			transition: all 0.2s;
+		}
+		button:hover{
+			color:black;
+			background-color:white;
+		}
+		div#canvasHolder{
+			display: flex;
+			justify-content: center;
+			align-items:center;
+			width:100%;
+		}
+	</style>
+</head>
+<body>
+	<h1>Neat.js</h1>
+	<p>In this demo, a single network is used, there is no evolution process</p>
+	<div id="canvasHolder">
+		<canvas id="canvas"></canvas>
+		<canvas id="canvas2"></canvas>
+	</div>
+	<br/>
+	<button onclick="mutateNetwork()">Mutate shape</button>
+	<button onclick="smallMutate()">Mutate weights</button>
+
+</body>
+<script type="text/javascript">
+	"use strict";
+
+	let network = new Network(["posX","posY","cst"],["red","green","blue"]);
+	let canvas1 = document.getElementById("canvas");
+
+
+	function updateNetworkRender(){
+		network.render(canvas1,canvas1.getContext('2d'));
+	}
+	function mutateNetwork(){
+		network.mutate(.5);
+		updateNetworkRender();
+		renderNet();
+	}
+	function smallMutate(){
+		network.mutateWeights(.2);
+		renderNet();
+	}
+	function renderNet(){
+		let canvas2 = document.getElementById("canvas2");
+		let g = canvas2.getContext('2d');
+
+		const resolution = 40;
+		const zoom = 20;
+
+		const xyTransform = function(x){
+			return ((x - resolution/2) * 2/resolution) * zoom;
+		}
+
+		for(let i = 0;i < resolution;i++){
+			for(let j = 0;j < resolution;j++){
+				let colorResult = network.compute([xyTransform(i),xyTransform(j),zoom]);
+				g.fillStyle = "rgb(" + Math.floor(colorResult[0]*2) + "," + Math.floor(colorResult[1]*2) + "," + Math.floor(colorResult[2]*2) + ")";
+
+				g.fillRect(i * canvas2.width / resolution,j * canvas2.height / resolution,canvas2.width * 1.1 / resolution,canvas2.height * 1.2 / resolution);
+			}
+		}
+	}
+
+	updateNetworkRender();
+	renderNet();
+</script>
+</html>
