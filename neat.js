@@ -408,12 +408,43 @@ class Network{
 		}
 		return result;
 	}
-	// export network to json format.
+	// Exports network to json format.
+	// Exported networks are not supposed to be evolved futher but can be used to compute values.
+	// You can still evolve them if you want but its not an intended feature.
+	// fitness and default activator functions are not exported.
 	export(compress){
 		compress = compress === undefined ? true : false; // compress by default ie remove unimportant fields like fitness or color of nodes.
-	}
-	// overrides the current network with the imported one
-	import(jsonData){
+
+		let outputObject = {};
+
+		outputObject.inputNodes = JSON.parse(JSON.stringify(this.inputNodes));
+		outputObject.outputNodes = JSON.parse(JSON.stringify(this.outputNodes));
+		outputObject.edges = JSON.parse(JSON.stringify(this.edges));
+		// copy the node dict.
+		outputObject.nodes = {};
+
+		for(let i in this.nodes){
+			outputObject.nodes[i] = JSON.parse(JSON.stringify(this.nodes[i]));
+			let actFound = false;
+			for(let actName in activators){
+				if(this.nodes[i].activators === activators[actName]){
+					outputObject.nodes[i].activator = actName;
+					actFound = true;
+					break;
+				}
+			}
+			if(compress){
+				delete outputObject.nodes[i].color;
+				delete outputObject.nodes[i].value;
+				delete outputObject.nodes[i].label;
+				delete outputObject.nodes[i].x;
+			}
+			if(!actFound){
+				console.error("Unable to export network properly, use of custom activators functions. (Replacing them with relu.)");
+				outputObject.nodes[i].activator = "relu";
+			}
+		}
+		return JSON.stringify(outputObject);
 
 	}
 	// removes all nodes and creates a classic layout with layers
@@ -423,6 +454,37 @@ class Network{
 	}
 }
 
+// Convert json data obtained from net.export() to a network.
+function importNetworkFromJSON(jsonData){
+	let parsedData = JSON.parse(jsonData);
+	let net = new Network([],[]);
+	net.inputNodes = parsedData.inputNodes;
+	net.outputNodes = parsedData.outputNodes;
+	net.edges = parsedData.edges;
+	net.nodes = parsedData.nodes;
+	for(let i in this.nodes){
+		let actFound = false;
+		for(let actName in activators){
+			if(net.nodes[i].activator === actName){
+				net.nodes[i].activator = activators[actName];
+				actFound = true;
+				break;
+			}
+		}
+		if(net.nodes[i].color === undefined){
+			net.nodes[i].color = "#f00";
+			net.nodes[i].value = 0;
+			net.nodes[i].label = "???";
+			net.nodes[i].x = Math.random() * 10;
+		}
+		if(!actFound){
+			console.error("Unknown activator function: ",net.nodes[i].activator);
+			console.error("Network probably comes from a newer version of neat. Replacing it with relu.");
+			net.nodes[i].activator = activators["relu"];
+		}
+	}
+	return net;
+}
 
 // represents a set of networks able to evolve.
 
