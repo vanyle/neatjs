@@ -39,7 +39,7 @@ let context = canvas.getContext("2d");
 net.render(canvas,context);
 ```
 
-### edgeToNode  (private)
+### edgeToNode 
 Replaces an edge of the network the a node and 2 edges coming from and to the node.
 
 parameters: edgeId
@@ -105,3 +105,40 @@ Exports the network to JSON
 parameters: compress (optional)
 *compress*: When true, the colors of the nodes are not exported not are their values and some other fields not affecting the compute function of the network.
 returns: A JSON-formatted string that can be converted to a network with `importNetworkFromJSON`
+
+## NetworkPool - class
+
+NetworkPool represent a set of neural networks that are designed to solve the same task.
+```js
+// Function that the networks of the pool will try to evolve towards.
+function predictGoal(x,y){
+	return [5*x + y,6*y + x];
+}
+
+const poolSettings = { // those are default settings, giving settings is optional.
+    poolSize: 50,
+    poolCount: 20, 
+};
+
+let pool = new NetworkPool(["x","y"],["result1,result2"],poolSettings);
+
+function processGeneration(){
+	// Give data to the pool to give a selection criteria.
+	let data = []; // generate data to teach the networks by giving them some examples.
+
+	// make a few data points for training.
+	for(let i = 0;i < 100;i++){
+		let pointPos = [Math.random() * 20 - 10,Math.random() * 20 - 10];
+		let dataPoint = predictGoal(pointPos[0],pointPos[1]);
+		data.push([poitPos,dataPoint]); // [inputs,outputs]
+	}
+	pool.processGeneration(data);
+}
+
+for(let i = 0;i < 100;i++){
+	processGeneration();
+}
+// Get the fitest individual of the pool
+let bestNet = pool.getBestNetwork();
+console.log(bestNet.compute(4,5),predictGoal([4,5]));
+```

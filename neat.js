@@ -30,21 +30,21 @@ class Network{
 		this.nodes = {}; // actual node objects, hashmap. nodeIds are keys.
 		this.inputNodes = []; // node ids of inputs (contains strings starts with i)
 		this.outputNodes = []; // bide ids of outputs (contains strings starts with o)
-		this.edges = []; // actual edges.
+		this.edges = {}; // actual edges.
 
 		this.fitness = 0; // bigger = better
 		this.fitnessTestsCount = 0; // counts how many time the fitness was tested. Used for averaging the fitness properly.
 
 		// edge example:
 		/*
-		this.edges = [
-			{
+		this.edges = {
+			<historicId> : {
 				'from':nodeId1,
 				'to':nodeId2,
 				'weight':.5,
 				'historicId':0, // used for mutations and breeding
 			}
-		]
+		}
 		*/
 
 		// things saved from the settings object if not undefined.
@@ -143,7 +143,7 @@ class Network{
 			g.stroke();
 		}
 
-		for(let i = 0;i < this.edges.length;i++){
+		for(let i in this.edges){
 			let nodeBegin = this.nodes[this.edges[i].from];
 			let nodeEnd = this.nodes[this.edges[i].to];
 
@@ -159,8 +159,19 @@ class Network{
 		// choose an edge at random.
 		let ed = this.edges[edgeId];
 
+		if(ed === undefined){
+			console.error("Unknown edgeId. Unable to perform node conversion.");
+			return;
+		}
+
 		let nodeStart = this.nodes[ed.from];
 		let nodeEnd = this.nodes[ed.to];
+
+		if(nodeStart === undefined || nodeEnd === undefined){
+			console.log(ed);
+			console.log(this.nodes);
+			throw "Bad integrity";
+		}
 
 		function pick(arr){
 			return arr[Math.floor(Math.random() * arr.length)];
@@ -169,8 +180,8 @@ class Network{
 		let n = {
 			id: 'p'+Math.floor(Math.random() * 10000), // unique id search.
 			color: '#0f0',
-			x: (nodeStart.x + nodeEnd.x + (Math.random()-.5)/5) / 2, // put new node in the middle between the 2 others + small offset
-			y: (nodeStart.y + nodeEnd.y + (Math.random()-.5)/5) / 2,
+			x: (nodeStart.x + nodeEnd.x) / 2, // put new node in the middle between the 2 others + small offset
+			y: (nodeStart.y + nodeEnd.y) / 2,
 			value: 0,
 			activator: pick(this.activators),
 			label: 'process' // some nice info about at what point this node was mutate can be added here of the activator fn or something.
@@ -199,10 +210,10 @@ class Network{
 		}; // n -> nodeEnd
 		
 		// We dont change the historic id of the old edge (the ed variable). Is this a good idea ?
-		uniqueHistoricCounter ++;
 
 		ed.to = n.id; // nodeStart -> n
-		this.edges.push(newedge);
+		this.edges[uniqueHistoricCounter] = newedge;
+		uniqueHistoricCounter ++;
 		this.nodes[n.id] = n;
 	}
 	removeNode(nodeId){ // input and output nodes cannot be removed.
@@ -214,7 +225,7 @@ class Network{
 		}
 		delete this.nodes[nodeId];
 		// remove all edges with nodeId inside.
-		for(let i = 0;i < this.edges.length;i++){
+		for(let i in this.edges){
 			if(this.edges[i].from === nodeId || this.edges[i].to === nodeId){
 				this.removeEdge(i); // bad perf. use hashmap for edges ?
 				// Is infinite recursion possible because of this ? probably not.
@@ -224,13 +235,19 @@ class Network{
 	}
 	removeEdge(edgeId){
 		let edge = this.edges[edgeId];
-		this.edges.splice(edgeId,1); // remove it now to prevent infinite recursion w/ removeEdge and removeNode.
+		if(edge === undefined){
+			console.error("Bad edge id. No removal performed");
+			return;
+		}
+		// remove it now to prevent infinite recursion w/ removeEdge and removeNode.
+		// But keep the index to avoid offset everybody until the removal is finished.
+		delete this.edges[edgeId]
 
 		// remove nodes that only have this edge as output / input and are not i/o nodes.
 		let nodeFromId = edge.from;
 		if(this.inputNodes.indexOf(nodeFromId) === -1){ // not from an input
 			let otherEdgeFound = false; // search if another edge uses this node as input
-			for(let i = 0;i < this.edges.length;i++){
+			for(let i in this.edges){
 				if(i !== edgeId && this.edges[i].from == nodeFromId){
 					otherEdgeFound = true;
 					break;
@@ -244,7 +261,7 @@ class Network{
 		let nodeToId = edge.to; // same code but in the other direction.
 		if(this.outputNodes.indexOf(nodeToId) === -1){
 			let otherEdgeFound = false;
-			for(let i = 0;i < this.edges.length;i++){
+			for(let i in this.edges){
 				if(i !== edgeId && this.edges[i].to == nodeToId){
 					otherEdgeFound = true;
 					break;
@@ -278,11 +295,10 @@ class Network{
 				weight: this.weightInit(),
 				historicId: uniqueHistoricCounter
 			};
-			uniqueHistoricCounter ++;
 
 			// check if the edge does not already exists.
 			let idEdgeFound = false;
-			for(let i = 0;i < this.edges.length;i++){
+			for(let i in this.edges){
 				if(this.edges[i].from == newedge.from && this.edges[i].to == newedge.to){
 					idEdgeFound = true;
 					break; // break from for
@@ -291,7 +307,9 @@ class Network{
 			if(idEdgeFound){
 				continue;
 			}
-			this.edges.push(newedge);
+			this.edges[uniqueHistoricCounter] = newedge;
+			uniqueHistoricCounter ++;
+
 			break;
 		}
 	}
@@ -299,7 +317,7 @@ class Network{
 	// mutateWeights(1) twice is less strong than mutateWeights(2) once.
 	mutateWeights(strength){
 		// change weights of connections. Does not change overall network topology.
-		for(let i = 0;i < this.edges.length;i++){
+		for(let i in this.edges){
 			this.edges[i].weight += (Math.random()-.5) * 2 * strength;
 		}
 	}
@@ -322,11 +340,17 @@ class Network{
 
 		// add node (rare, 50% chance at most)
 		// ie replace an edge by a node.
-		if(this.edges.length > 0 && Math.random() < strength/2){
-			// console.log("Node add attempt");
-			this.edgeToNode(Math.floor(Math.random() * this.edges.length));
+
+		const maxComputeNode = 5; // too much nodes slows down the speed of the network.
+
+		let newNodeAllowed = Object.keys(this.nodes).length < this.inputNodes.length + this.outputNodes.length + maxComputeNode;
+
+		if(Object.keys(this.edges).length > 0 && Math.random()/2 < strength && newNodeAllowed){
+			const edgeIds = Object.keys(this.edges);
+			this.edgeToNode(edgeIds[Math.floor(Math.random() * edgeIds.length)]);
 		}
-		if(Math.random() < strength/3){ // remove node add all edge from or to it.
+
+		if(Math.random() < strength/3 && Object.keys(this.nodes).length > 0){ // remove node add all edge from or to it.
 			// Removing a node destroys a lot of edges so it should be rarer than add.
 			this.removeNode(this.pickRandomNodeId());
 		}
@@ -337,11 +361,11 @@ class Network{
 			}
 		}
 		for(let i = 0;i < 3;i++){
-			if(this.edges.length > 0 && Math.random() < strength){ // remove edge.
-				this.removeEdge(Math.floor(Math.random() * this.edges.length));
+			const edgeIds = Object.keys(this.edges);
+			if(edgeIds.length > 0 && Math.random() < strength){ // remove edge.
+				this.removeEdge(edgeIds[Math.floor(Math.random() * edgeIds.length)]);
 			}
 		}
-
 	}
 	breed(otherNet){
 		// The child has the same shape as one of its parents.
@@ -351,15 +375,12 @@ class Network{
 
 		let childNet = this.copy();
 		// Compute average of the edges with the same historic marking.
-		for(let i = 0;i < childNet.edges.length;i++){
+		for(let i in childNet.edges){
 			// Find if otherNet contains an edge with the corresponding historic marking.
-			for(let j = 0;j < otherNet.edges.length;j++){
-				if(otherNet.edges[j].historicId === childNet.edges[i].historicId){
-					// Pick one or the other, not average.
-					childNet.edges[i].weight = Math.random()>.5 ? childNet.edges[i].weight : otherNet.edges[j].weight;
-
-					break;
-				}
+			if(otherNet.edges[i] !== undefined){
+				// Pick one or the other, not average.
+				childNet.edges[i].weight = Math.random()>.5 ? childNet.edges[i].weight : otherNet.edges[i].weight;
+				break;
 			}
 		}
 
@@ -386,12 +407,16 @@ class Network{
 		let computeValue = function(nodeId){
 			// console.log("cpt value of ",nodeId);
 			let nodeObj = self.nodes[nodeId];
+			if(nodeObj === undefined){
+				console.log(nodeId);
+				console.log(self);
+			}
 			if(nodeObj.value !== null){
 				return nodeObj.value;
 			}
 
 			let val = 0; // add values from all nodes pointing to nodeId
-			for(let i = 0;i < self.edges.length;i++){
+			for(let i in self.edges){
 				if(self.edges[i].to === nodeId){
 					let nodeFromId = self.edges[i].from;
 					val += computeValue(nodeFromId) * self.edges[i].weight;
@@ -437,7 +462,7 @@ class Network{
 				delete outputObject.nodes[i].color;
 				delete outputObject.nodes[i].value;
 				delete outputObject.nodes[i].label;
-				delete outputObject.nodes[i].x;
+				delete outputObject.nodes[i].y;
 			}
 			if(!actFound){
 				console.error("Unable to export network properly, use of custom activators functions. (Replacing them with relu.)");
@@ -475,7 +500,7 @@ function importNetworkFromJSON(jsonData){
 			net.nodes[i].color = "#f00";
 			net.nodes[i].value = 0;
 			net.nodes[i].label = "???";
-			net.nodes[i].x = Math.random() * 10;
+			net.nodes[i].y = Math.random() * 10;
 		}
 		if(!actFound){
 			console.error("Unknown activator function: ",net.nodes[i].activator);
@@ -532,6 +557,16 @@ class NetworkPool{
 		}
 
 	}
+	getPoolName(){ // returns a pronounceable, memorable word.
+		const vowels = "aeiou";
+		const consonants = "tsmnpklv";
+		let name = "";
+		for(let i = 0;i < 4;i++){
+			name += consonants[Math.floor(Math.random() * vowels.length)];
+			name += vowels[Math.floor(Math.random() * vowels.length)];
+		}
+		return name;
+	}
 	// poolVariation: how similar are the individuals in the pool when created. 0 = identical. 1 by default
 	makePoolFromNetwork(net,poolVariation){
 		poolVariation = typeof poolVariation === "number" ? poolVariation : 1;
@@ -539,7 +574,8 @@ class NetworkPool{
 		let networkPool = {
 			age: 1,
 			individuals: [net],
-			successScore: 1
+			successScore: 1,
+			name: "pool-"+this.getPoolName()
 		};
 		for(let j = 0;j < this.poolSize - 1;j++){
 			let newMember = net.copy();
@@ -561,22 +597,20 @@ class NetworkPool{
 			return totalError;
 		}
 
+
 		for(let i = 0;i < individuals.length;i++){
-			let oldfitnessTotal = individual[i].fitness * individual[i].fitnessTestsCount;
+			let oldfitnessTotal = individuals[i].fitness * individuals[i].fitnessTestsCount;
 			let errorVal = 0;
 			for(let j = 0;j < evaluationData.length;j++){
-				let indivResponse = individual[i].compute(evaluationData[j][0]);
+				let indivResponse = individuals[i].compute(evaluationData[j][0]);
 				errorVal += error(indivResponse,evaluationData[j][1]);
 			}
 			errorVal /= evaluationData.length; // avg error over all data provided.
 			oldfitnessTotal += 1/Math.abs(.001 + errorVal) * evaluationData.length;
-			individual[i].fitnessTestsCount += evaluationData.length;
-			individual[i].fitness = oldfitnessTotal / individual[i].fitnessTestsCount;
+			individuals[i].fitnessTestsCount += evaluationData.length;
+			individuals[i].fitness = oldfitnessTotal / individuals[i].fitnessTestsCount;
 		}
-
 		
-		this.networkPools[poolId].successScore = newfitnessScore; // avg fitness of everybody.
-
 		// sort everybody by fitness. (desc order)
 		this.networkPools[poolId].individuals.sort(function(a,b){
 			return b.fitness - a.fitness;
@@ -604,22 +638,26 @@ class NetworkPool{
 		}
 
 	}
+
+	// This is too slow. Work on speed up. (Use dicts for edges probably.)
 	processGeneration(evaluationData,cleanPools){ // cleanPools = .9 recommended. (removes the 2 worst pools everytime.)
 		// First, eval the networks of every sub pool.
 		// We eval every network in the pool seperatly
 		for(let i = 0;i < this.networkPools.length;i++){
 			this.processPool(i,evaluationData,0.3);
 		}
-		const successScoreAgeSmoothing = 5;
+		const successScoreAgeSmoothing = 10;
 		// sort pools by score / age
 		this.networkPools.sort(function(a,b){
 			return b.successScore / (b.age + successScoreAgeSmoothing) - a.successScore / (a.age + successScoreAgeSmoothing);
+			// return b.successScore - a.successScore;
 		});
 
 		if(typeof cleanPools !== "number"){
 			return;
 		}
-		let remainCount = Math.max(((1 - cleanPools) * this.networkPools.length),1);
+		let remainCount = Math.max( Math.floor(cleanPools * this.networkPools.length),1);
+
 		for(let i = remainCount;i < this.networkPools.length;i++){
 			this.networkPools[i] = null;
 			// make a new pool by mutating the best networks of some pools
@@ -628,28 +666,25 @@ class NetworkPool{
 
 			originNetwork.mutate(.5);
 			
-			this.networkPools[i] = this.makePoolFromNetwork(net,.3);
+			this.networkPools[i] = this.makePoolFromNetwork(originNetwork,.3);
 		}
 	}
 	getBestNetwork(){
-		// take best pool based on sucess, not age and take its best network based on fitness.
-		// We assume pools are not sorted in any way here.
-		let bestPoolScore = this.networkPools[0].successScore;
+		let bestIndivScore = this.networkPools[0].individuals[0].fitness;
 		let bestPoolIndex = 0;
-		for(let i = 1;i < this.networkPools.length;i++){
-			if(this.networkPools[i].successScore > bestPoolScore){
-				bestPoolScore = this.networkPools[i].successScore;
-				bestPoolIndex = i;
-			}
-		}
-		let bestIndivScore = this.networkPools[bestPoolIndex].individuals[0].fitness;
 		let bestIndivIndex = 0;
-		for(let i = 0;i < this.networkPools[bestPoolIndex].individuals.length;i++){
-			if(this.networkPools[bestPoolIndex].individuals[i].fitness > bestIndivScore){
-				bestPoolScore = this.networkPools[bestPoolIndex].individuals[i].fitness;
-				bestIndivIndex = i;
+
+		for(let i = 0;i < this.networkPools.length;i++){
+			for(let j = 1;j < this.networkPools[i].individuals.length;j++){
+				if(this.networkPools[i].individuals[j].fitness > bestIndivScore){
+					bestIndivScore = this.networkPools[i].individuals[j].fitness;
+					bestPoolIndex = i;
+					bestIndivIndex = j;
+				}
 			}
 		}
+
+		console.log("Best is in "+this.networkPools[bestPoolIndex].name);
 
 		return this.networkPools[bestPoolIndex].individuals[bestIndivIndex];
 	}
