@@ -7,19 +7,80 @@
 		*{
 			background-color:black;
 			color:white;
+			font-family: Helvetica;
+		}
+		table,th,tr{
+			border-collapse: collapse;
+		}
+		th{
+			border:1px solid white;
+			padding:5px;
+			margin:0;
+		}
+		body,html{
+			height: 100%;
+			width:100%;
+			overflow: hidden;
+		}
+		.flex{
+			display: flex;
+			width:100%;
+			height:100%;
+			align-items: center;
+			justify-content: space-around;
+		}
+		button{
+			text-align:center;
+			padding:5px;
+			margin:0 10px;
+			border: 2px solid white;
+			border-radius: 2px;
+			text-decoration:none;
+			color:white;
+			cursor: pointer;
+			font-size:20px;
+			background-color:transparent;
+			transition: all 0.2s;
+		}
+		button:hover{
+			color:black;
+			background-color:white;
+		}
+		canvas{
+			position: relative;
+			height: 150%;
 		}
 	</style>
 	<script type="text/javascript" src="../neat.js"></script>
 </head>
 <body>
-	<p>In this demo, We'll try to evolve a network able to compute a xor function</p>
-	<p>A xor looks like this: f(x,y) = abs(x - y)
-	<canvas id="canvas2"></canvas>
-	<p>Current render of the best network.</p>
-	<canvas id="canvas"></canvas>
-	<p>Current species, sorted by fitness (species have a random name.)</p>
-	<button onclick="processGen(10)">Process 10 generation (animated)</button>
-	<pre id="species"></pre>
+	<p>In this demo, We'll try to evolve a network able to compute the function with 2 parameters rendered below.</p>
+
+	<div class='flex'>
+		<div>
+		<p>Function goal.</p>
+		<canvas id="canvas2"></canvas>
+		<p>Current render of the best network.</p>
+		<canvas id="canvas"></canvas>
+		</div>
+		
+
+		<div>
+			<button onclick="processGen(10)">Process 10 generation (animated)</button>
+			<p>Current species, sorted by fitness (species have a random name.)</p>
+			<br/><br/>
+			<table id="table">
+				<tr>
+					<th>Name</th>
+					<th>Age (generation)</th>
+					<th>Species fitness</th>
+				</tr>
+				<tr>
+					<th colspan="3">Loading</th>
+				</tr>
+			</table>
+		</div>
+	</div>
 </body>
 <script type="text/javascript">
 	
@@ -35,7 +96,7 @@
 	let data = []; // generate data to teach the networks by giving them some examples.
 
 	function predictionGoal(i,j){
-		return (Math.abs(i - j) > 5) ? [1] : [0];
+		return (Math.abs(i - j) < 5) ? [1] : [0];
 	}
 
 	// make 100 data points for training.
@@ -51,26 +112,38 @@
 
 		function doRound(){
 			pool.processGeneration(data,.9);
-			let preData = "Name | Age | Score\n";
-			for(let i = 0;i < pool.networkPools.length;i++){
-				preData += pool.networkPools[i].name + " | " + pool.networkPools[i].age + " | " + pool.networkPools[i].successScore + "\n"
+
+			let resultTable = document.getElementById('table');
+
+			resultTable.innerHTML = "<tr><th>Name</th><th>Age (generation)</th><th>Species fitness</th></tr>";
+
+			for(let i = 0;i < Math.min(pool.networkPools.length,10);i++){
+				let trElement = document.createElement('tr');
+				trElement.innerHTML = "<th>" + pool.networkPools[i].name + "</th>";
+				trElement.innerHTML += "<th>" + pool.networkPools[i].age + "</th>";
+				trElement.innerHTML += "<th>"+(Math.round(pool.networkPools[i].successScore*100)/100) + "</th>";
+				resultTable.appendChild(trElement);
 			}
-			document.getElementById("species").innerHTML = preData;
+			if(pool.networkPools.length > 10){
+				let trElement = document.createElement('tr');
+				trElement.innerHTML = "<th colspan=3> ... </th>";
+				resultTable.appendChild(trElement);
+			}
 			renderBestNet();
 		}
 		if(rounds === undefined){
 			doRound();
 		}else{
-			const animationDelay = 100; // ms
-			
+			const animationDelay = 50; // ms
 			let counter = 0;
-			let inter = setInterval(function(){
+			let roundLoop = function(){
 				doRound();
 				counter ++;
-				if(counter >= rounds){
-					clearInterval(inter);
+				if(counter < rounds){
+					setTimeout(roundLoop,animationDelay);
 				}
-			},animationDelay);
+			};
+			roundLoop(); // simulates sleep in js
 		}
 
 		//let bestNet = pool.getBestNetwork();
@@ -126,7 +199,7 @@
 
 	renderExpectedResult();
 
-	processGen(50);
+	processGen(100);
 
 </script>
 </html>
