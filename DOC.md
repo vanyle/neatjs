@@ -108,7 +108,7 @@ returns: A JSON-formatted string that can be converted to a network with `import
 
 ## NetworkPool - class
 
-NetworkPool represent a set of neural networks that are designed to solve the same task.
+NetworkPool represent a set of neural networks that are designed to solve the same task. The pool makes the networks evolve together and stores them into various groups called species to promote innovation.
 ```js
 // Function that the networks of the pool will try to evolve towards.
 function predictGoal(x,y){
@@ -142,3 +142,18 @@ for(let i = 0;i < 100;i++){
 let bestNet = pool.getBestNetwork();
 console.log(bestNet.compute(4,5),predictGoal([4,5]));
 ```
+
+`evaluationData` can be: (the argument of `pool.processGeneration`)
+
+- A 3d array with the format: array of [arrayOfInputsForIndividual,arrayOfExpectedOutput]
+
+- A function that takes an individual as input and outputs its fitness
+
+- An object with an update member function that takes all individuals inside the pool and updates their fitness accordingly.
+
+
+If you want your individuals to compete with one another, use the last option (To make them play chess against one another for example), it is the most general option. Update only the fitness of the individuals, the pool will do the sorting and mutating for you.
+
+If you can easily evaluate the performance of an individual using some kind of function (If you want to train your agents to walk for example), use the middle option.
+
+If the individuals can be evaluated on a single piece of data, like for classification tasks, use the first option.

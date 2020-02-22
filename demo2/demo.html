@@ -99,8 +99,8 @@
 		return (Math.abs(i - j) < 5) ? [1] : [0];
 	}
 
-	// make 100 data points for training.
-	const learnSize = 10;
+	// make a bunch of data points for training.
+	const learnSize = 12;
 	for(let i = 0;i < learnSize;i++){
 		for(let j = 0;j < learnSize;j++){
 			let dataPoint = [[i,j,1],predictionGoal(i,j)];

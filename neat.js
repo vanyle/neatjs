@@ -341,7 +341,7 @@ class Network{
 		// add node (rare, 50% chance at most)
 		// ie replace an edge by a node.
 
-		const maxComputeNode = 5; // too much nodes slows down the speed of the network.
+		const maxComputeNode = 8; // too much nodes slows down the speed of the network. Make this customizable.
 
 		let newNodeAllowed = Object.keys(this.nodes).length < this.inputNodes.length + this.outputNodes.length + maxComputeNode;
 
@@ -350,7 +350,7 @@ class Network{
 			this.edgeToNode(edgeIds[Math.floor(Math.random() * edgeIds.length)]);
 		}
 
-		if(Math.random() < strength/3 && Object.keys(this.nodes).length > 0){ // remove node add all edge from or to it.
+		if(Math.random() < strength/2 && Object.keys(this.nodes).length > 0){ // remove node add all edge from or to it.
 			// Removing a node destroys a lot of edges so it should be rarer than add.
 			this.removeNode(this.pickRandomNodeId());
 		}
@@ -579,7 +579,7 @@ class NetworkPool{
 		};
 		for(let j = 0;j < this.poolSize - 1;j++){
 			let newMember = net.copy();
-			newMember.mutateWeights(1); // by default, weights range from -2 to 2.
+			newMember.mutateWeights(poolVariation); // by default, weights range from -2 to 2.
 			networkPool.individuals.push(newMember);
 		}
 		return networkPool;
@@ -597,21 +597,36 @@ class NetworkPool{
 			return totalError;
 		}
 
-
 		for(let i = 0;i < individuals.length;i++){
-			let oldfitnessTotal = individuals[i].fitness * individuals[i].fitnessTestsCount;
-			let errorVal = 0;
-			for(let j = 0;j < evaluationData.length;j++){
-				let indivResponse = individuals[i].compute(evaluationData[j][0]);
-				errorVal += error(indivResponse,evaluationData[j][1]);
+
+			if(evaluationData instanceof Array){
+				// evaluation Data is 3d array:
+				// array of [arrayWithInput,arrayWithExpectedoutput]
+
+				let oldfitnessTotal = individuals[i].fitness * individuals[i].fitnessTestsCount;
+				let errorVal = 0;
+				for(let j = 0;j < evaluationData.length;j++){
+					let indivResponse = individuals[i].compute(evaluationData[j][0]);
+					errorVal += error(indivResponse,evaluationData[j][1]);
+				}
+				errorVal /= evaluationData.length; // avg error over all data provided.
+				oldfitnessTotal += 1/Math.abs(.001 + errorVal) * evaluationData.length;
+				individuals[i].fitnessTestsCount += evaluationData.length;
+				individuals[i].fitness = oldfitnessTotal / individuals[i].fitnessTestsCount;
+
+			}else if(typeof evaluationData === "function"){
+				// evaluationData is a function that takes 1 individual as input and outputs its score. (fitness)
+				individuals[i].fitness = evaluationData(individuals[i]);
 			}
-			errorVal /= evaluationData.length; // avg error over all data provided.
-			oldfitnessTotal += 1/Math.abs(.001 + errorVal) * evaluationData.length;
-			individuals[i].fitnessTestsCount += evaluationData.length;
-			individuals[i].fitness = oldfitnessTotal / individuals[i].fitnessTestsCount;
+
 		}
 		
+		this.sortPool(poolId,selectionStrength);
+
+	}
+	sortPool(poolId,selectionStrength){
 		// sort everybody by fitness. (desc order)
+		let individuals = this.networkPools[poolId].individuals;
 		this.networkPools[poolId].individuals.sort(function(a,b){
 			return b.fitness - a.fitness;
 		});
@@ -621,7 +636,7 @@ class NetworkPool{
 		this.networkPools[poolId].age += 1;
 
 		selectionStrength = selectionStrength || .3;
-		// take top 70%
+		// take top 70% if selectionStrength is not defined.
 		// replace the others
 		let remainCount = Math.max(((1 - selectionStrength) * individuals.length),1);
 		for(let i = remainCount;i < individuals.length;i++){
@@ -629,24 +644,39 @@ class NetworkPool{
 
 			let parent1 = Math.floor(Math.random() * remainCount);
 			let parent2 = Math.floor(Math.random() * remainCount/2);
-			while(parent2 !== parent1){
-				parent2 = Math.floor(Math.random() * remainCount);
+			while(parent2 !== parent1){ // pick 2 good parents, we assume that there are at least 2 individuals remaining.
+				parent1 = Math.floor(Math.random() * remainCount);
 			}
 			let newindiv = individuals[parent1].breed(individuals[parent2]);
 			newindiv.mutateWeights(.1); // small mutation after breeding.
 			this.networkPools[poolId].individuals[i] = newindiv;
 		}
-
 	}
-
 	// This is too slow. Work on speed up. (Use dicts for edges probably.)
+	// Also, support for custom evaluation.
 	processGeneration(evaluationData,cleanPools){ // cleanPools = .9 recommended. (removes the 2 worst pools everytime.)
 		// First, eval the networks of every sub pool.
 		// We eval every network in the pool seperatly
-		for(let i = 0;i < this.networkPools.length;i++){
-			this.processPool(i,evaluationData,0.3);
+		if(typeof evaluationData === "function" || evaluationData instanceof Array){
+			for(let i = 0;i < this.networkPools.length;i++){
+				this.processPool(i,evaluationData,0.3);
+			}
+		}else{
+			let everybody = [];
+			for(let i = 0;i < this.networkPools.length;i++){
+				for(let j = 0;j < this.networkPools[i].individuals.length;j++){
+					everybody.push(this.networkPools[i].individuals[j]);
+				}
+			}
+			
+			evaluationData.update(everybody);
+			// Do the sorting inside the pools.
+			for(let i = 0;i < this.networkPools.length;i++){
+				this.sortPool(i,0.3);
+			}
+
 		}
-		const successScoreAgeSmoothing = 10;
+		const successScoreAgeSmoothing = 40;
 		// sort pools by score / age
 		this.networkPools.sort(function(a,b){
 			return b.successScore / (b.age + successScoreAgeSmoothing) - a.successScore / (a.age + successScoreAgeSmoothing);
@@ -678,6 +708,211 @@ class NetworkPool{
 			for(let j = 1;j < this.networkPools[i].individuals.length;j++){
 				if(this.networkPools[i].individuals[j].fitness > bestIndivScore){
 					bestIndivScore = this.networkPools[i].individuals[j].fitness;
+					bestPoolIndex = i;
+					bestIndivIndex = j;
+				}
+			}
+		}
+
+		console.log("Best is in "+this.networkPools[bestPoolIndex].name);
+
+		return this.networkPools[bestPoolIndex].individuals[bestIndivIndex];
+	}
+}
+
+// Pool containing objects that are not networks but can contain network themselves.
+// For example, individuals with a size, a name and a brain represented by a network.
+// Code is very similar to NetworkPool
+class CustomPool{
+	constructor(template,settings){
+		// 50 * 20 = 1000 networks by default.
+		this.poolSize = settings.poolSize || 50;
+		this.poolCount = settings.poolCount || 20;
+
+		this.networkPools = [];
+		this.templateTools = template;
+
+		// template contains a set a function to produce / copy / mutate a given object layout
+		// template has to contain :
+		/*
+		template.copy(indivdual) -> copy of individual
+		template.mutate(individual,strength=optional) -> undefined
+		template.mutateWeight(individual,strength=optional) -> undefined
+		template.new() -> individual (returns the most basic individual)
+		The default individual should have a net field containing an initialized network.
+
+		template.breed(indiv1,indiv2) -> individial
+		*/
+
+		for(let i = 0;i < this.poolCount;i++){
+			let newIndiv = this.templateTools.new();
+			if(!(newIndiv.net instanceof Network)){
+				console.error("Unable to setup CustomPool, template.new goes not return a valid individual");
+				throw 0;
+				return;
+			}
+			for(let j = 0;j < 10;j++){
+				this.templateTools.mutate(newIndiv,0.7);
+			}
+			this.networkPools.push(this.makePoolFromIndividual(newIndiv));
+		}
+	}
+	getPoolName(){ // returns a pronounceable, memorable word.
+		const vowels = "aeiou";
+		const consonants = "tsmnpklv";
+		let name = "";
+		for(let i = 0;i < 4;i++){
+			name += consonants[Math.floor(Math.random() * vowels.length)];
+			name += vowels[Math.floor(Math.random() * vowels.length)];
+		}
+		return name;
+	}
+	makePoolFromIndividual(indiv,poolVariation){
+		poolVariation = typeof poolVariation === "number" ? poolVariation : 1;
+
+		let networkPool = {
+			age: 1,
+			individuals: [indiv],
+			successScore: 1,
+			name: "pool-"+this.getPoolName()
+		};
+
+		for(let j = 0;j < this.poolSize - 1;j++){
+			let newIndiv = this.templateTools.copy(indiv);
+			this.templateTools.mutateWeights(newIndiv,poolVariation); // by default, weights range from -2 to 2.
+			networkPool.individuals.push(newIndiv);
+		}
+		return networkPool;
+	}
+	processPool(poolId,evaluationData,selectionStrength){
+		// recompute fitness for everybody in the network.
+		let individuals = this.networkPools[poolId].individuals;
+		
+		function error(arr1,arr2){
+			let totalError = 0;
+			for(let i = 0;i < arr1.length;i++){
+				totalError += (arr1[i] - arr2[i]) ** 2;
+			}
+			return totalError;
+		}
+
+		for(let i = 0;i < individuals.length;i++){
+
+			if(evaluationData instanceof Array){
+				// evaluation Data is 3d array:
+				// array of [arrayWithInput,arrayWithExpectedoutput]
+
+				let oldfitnessTotal = individuals[i].net.fitness * individuals[i].net.fitnessTestsCount;
+				let errorVal = 0;
+				for(let j = 0;j < evaluationData.length;j++){
+					let indivResponse = individuals[i].net.compute(evaluationData[j][0]);
+					errorVal += error(indivResponse,evaluationData[j][1]);
+				}
+				errorVal /= evaluationData.length; // avg error over all data provided.
+				oldfitnessTotal += 1/Math.abs(.001 + errorVal) * evaluationData.length;
+				individuals[i].net.fitnessTestsCount += evaluationData.length;
+				individuals[i].net.fitness = oldfitnessTotal / individuals[i].net.fitnessTestsCount;
+
+			}else if(typeof evaluationData === "function"){
+				// evaluationData is a function that takes 1 individual as input and outputs its score. (fitness)
+				individuals[i].net.fitness = evaluationData(individuals[i].net);
+			}
+
+		}
+		
+		this.sortPool(poolId,selectionStrength);
+
+	}
+
+	sortPool(poolId,selectionStrength){
+		// sort everybody by fitness. (desc order)
+		let individuals = this.networkPools[poolId].individuals;
+		this.networkPools[poolId].individuals.sort(function(a,b){
+			return b.net.fitness - a.net.fitness;
+		});
+
+		// compute the score of the pool = score of the 2 best individuals
+		this.networkPools[poolId].successScore = this.networkPools[poolId].individuals[0].net.fitness + this.networkPools[poolId].individuals[1].net.fitness; 
+		this.networkPools[poolId].age += 1;
+
+		selectionStrength = selectionStrength || .3;
+		// take top 70% if selectionStrength is not defined.
+		// replace the others
+		let remainCount = Math.max(((1 - selectionStrength) * individuals.length),1);
+		for(let i = remainCount;i < individuals.length;i++){
+			individuals[i] = null; // tell the garbage collector to remove this object.
+
+			let parent1 = Math.floor(Math.random() * remainCount);
+			let parent2 = Math.floor(Math.random() * remainCount/2);
+			while(parent2 !== parent1){ // pick 2 good parents, we assume that there are at least 2 individuals remaining.
+				parent1 = Math.floor(Math.random() * remainCount);
+			}
+			let newindiv = this.templateTools.breed(individuals[parent1],individuals[parent2]);
+			this.templateTools.mutateWeights(newindiv,.1); // small mutation after breeding.
+			this.networkPools[poolId].individuals[i] = newindiv;
+		}
+	}
+	// returns an array containing all individuals regardless of species
+	getEverybody(){
+		let everybody = [];
+		for(let i = 0;i < this.networkPools.length;i++){
+			for(let j = 0;j < this.networkPools[i].individuals.length;j++){
+				everybody.push(this.networkPools[i].individuals[j]);
+			}
+		}
+		return everybody;
+	}
+	// This is too slow. Work on speed up. (Use dicts for edges probably.)
+	// Also, support for custom evaluation.
+	processGeneration(evaluationData,cleanPools){ // cleanPools = .9 recommended. (removes the 2 worst pools everytime.)
+		// First, eval the networks of every sub pool.
+		// We eval every network in the pool seperatly
+		if(typeof evaluationData === "function" || evaluationData instanceof Array){
+			for(let i = 0;i < this.networkPools.length;i++){
+				this.processPool(i,evaluationData,0.3);
+			}
+		}else{
+			let everybody = getEverybody();
+			
+			evaluationData.update(everybody);
+			// Do the sorting inside the pools.
+			for(let i = 0;i < this.networkPools.length;i++){
+				this.sortPool(i,0.3);
+			}
+
+		}
+		const successScoreAgeSmoothing = 40;
+		// sort pools by score / age
+		this.networkPools.sort(function(a,b){
+			return b.successScore / (b.age + successScoreAgeSmoothing) - a.successScore / (a.age + successScoreAgeSmoothing);
+			// return b.successScore - a.successScore;
+		});
+
+		if(typeof cleanPools !== "number"){
+			return;
+		}
+		let remainCount = Math.max( Math.floor(cleanPools * this.networkPools.length),1);
+
+		for(let i = remainCount;i < this.networkPools.length;i++){
+			this.networkPools[i] = null;
+			// make a new pool by mutating the best networks of some pools
+			let rndPool = this.networkPools[Math.floor(Math.random() * remainCount / 2)];
+			let originNetwork = this.templateTools.copy(rndPool.individuals[0]); // pool individuals are sorted by fitness after processPool
+
+			originNetwork.mutate(.5);
+			
+			this.networkPools[i] = this.makePoolFromNetwork(originNetwork,.3);
+		}
+	}
+	getBestNetwork(){
+		let bestIndivScore = this.networkPools[0].individuals[0].net.fitness;
+		let bestPoolIndex = 0;
+		let bestIndivIndex = 0;
+
+		for(let i = 0;i < this.networkPools.length;i++){
+			for(let j = 1;j < this.networkPools[i].individuals.length;j++){
+				if(this.networkPools[i].individuals[j].net.fitness > bestIndivScore){
+					bestIndivScore = this.networkPools[i].individuals[j].net.fitness;
 					bestPoolIndex = i;
 					bestIndivIndex = j;
 				}

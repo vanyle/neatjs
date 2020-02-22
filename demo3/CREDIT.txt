@@ -1,2 +1,0 @@
-Credit to https://github.com/google-research-datasets/wiki-split for the sentence list.
-You will find the train.tsv file there.
