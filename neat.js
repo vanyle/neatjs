@@ -654,7 +654,7 @@ class NetworkPool{
 	}
 	// This is too slow. Work on speed up. (Use dicts for edges probably.)
 	// Also, support for custom evaluation.
-	processGeneration(evaluationData,cleanPools){ // cleanPools = .9 recommended. (removes the 2 worst pools everytime.)
+	processGeneration(evaluationData,cleanPools){ // cleanPools = .9 recommended. (removes the 2 worst pools everytime.) Omit to not remove any pool
 		// First, eval the networks of every sub pool.
 		// We eval every network in the pool seperatly
 		if(typeof evaluationData === "function" || evaluationData instanceof Array){
@@ -872,9 +872,19 @@ class CustomPool{
 				this.processPool(i,evaluationData,0.3);
 			}
 		}else{
-			let everybody = getEverybody();
-			
-			evaluationData.update(everybody);
+			let everybody = this.getEverybody();
+			if(evaluationData !== null){
+				if(evaluationData.callback === false){
+					evaluationData[evaluationData.updateMethod](everybody);
+				}else{
+					// with callback.
+					let self = this;
+					evaluationData[evaluationData.updateMethod](everybody,function(){
+						self.processGeneration(null,cleanPools);
+					});
+					return;
+				}
+			}
 			// Do the sorting inside the pools.
 			for(let i = 0;i < this.networkPools.length;i++){
 				this.sortPool(i,0.3);
@@ -892,8 +902,11 @@ class CustomPool{
 			return;
 		}
 		let remainCount = Math.max( Math.floor(cleanPools * this.networkPools.length),1);
+		
+		// console.log(remainCount,this.networkPools.length,cleanPools);
 
 		for(let i = remainCount;i < this.networkPools.length;i++){
+			console.log("Removing worst gen.")
 			this.networkPools[i] = null;
 			// make a new pool by mutating the best networks of some pools
 			let rndPool = this.networkPools[Math.floor(Math.random() * remainCount / 2)];
@@ -901,7 +914,7 @@ class CustomPool{
 
 			originNetwork.mutate(.5);
 			
-			this.networkPools[i] = this.makePoolFromNetwork(originNetwork,.3);
+			this.networkPools[i] = this.makePoolFromIndividual(originNetwork,.3);
 		}
 	}
 	getBestNetwork(){

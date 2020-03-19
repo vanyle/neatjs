@@ -20,7 +20,7 @@ let my = 0;
 function computeCanvasPos(x,y){ // world pos -> canvas pos
 	return {
 		'x':(x - cameraX) * zoomCam * canvas.width / worldSize + canvas.width/2,
-		'y':(y - cameraY) * zoomCam * canvas.height / worldSize + canvas.height/2
+		'y':(y - cameraY) * zoomCam * canvas.width / worldSize + canvas.height/2
 	};
 }
 // use to draw things with a specific size.
@@ -32,7 +32,7 @@ function computeScalarCanvasPos(x){
 function reverseCanvasPos(x,y){ // win pos -> world pos
 	return {
 		'x':(x - canvas.width/2)*worldSize / canvas.width / zoomCam + cameraX + worldSize/2,
-		'y':(y - canvas.height/2)*worldSize / canvas.height / zoomCam + cameraY + worldSize/2
+		'y':(y - canvas.height/2)*worldSize / canvas.width / zoomCam + cameraY + worldSize/2
 	};
 }
 
@@ -87,7 +87,7 @@ function drawFood(x,y){
 
 function render(){
 	canvas.width = innerWidth;
-	canvas.height = innerWidth;
+	canvas.height = innerHeight;
 
 	for(let i = 0;i < food.length;i++){
 		drawFood(food[i].x,food[i].y);
@@ -97,6 +97,7 @@ function render(){
 	}
 
 	// draw borders
+
 
 	let pos1 = computeCanvasPos(0,0);
 	let pos2 = computeCanvasPos(0,100);
@@ -114,18 +115,18 @@ function render(){
 
 	// What the individual clicked sees and its brain.
 	if(clickedIndividual !== undefined){
-		let view = getInputs(clickedIndividual,food);
+		let view = getInputs(clickedIndividual,food,true);
 		for(let i = 0;i < view.length;i++){
 			g.fillStyle = 'rgb('+Math.floor(view[i]*400)+',0,0)';
-			g.fillRect(20*i+10,10,10,10);
+			g.fillRect(20*i+10,10,20,30);
 		}
 
-
 	}
-
 	requestAnimationFrame(render);
 }
-render();
+addEventListener('load',function(){
+	render();
+});
 
 function makeFlash(ind){
 	if(ind !== undefined && ind.oldColor === undefined){

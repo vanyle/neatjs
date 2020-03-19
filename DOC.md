@@ -132,7 +132,7 @@ function processGeneration(){
 		let dataPoint = predictGoal(pointPos[0],pointPos[1]);
 		data.push([poitPos,dataPoint]); // [inputs,outputs]
 	}
-	pool.processGeneration(data);
+	pool.processGeneration(data,.9);
 }
 
 for(let i = 0;i < 100;i++){
@@ -146,13 +146,25 @@ console.log(bestNet.compute(4,5),predictGoal([4,5]));
 `evaluationData` can be: (the argument of `pool.processGeneration`)
 
 - A 3d array with the format: array of [arrayOfInputsForIndividual,arrayOfExpectedOutput]
-
 - A function that takes an individual as input and outputs its fitness
-
-- An object with an update member function that takes all individuals inside the pool and updates their fitness accordingly.
-
+- An object with an updateMethod string member and a function called updateMethod that takes all individuals inside the pool and updates their fitness accordingly.
 
 If you want your individuals to compete with one another, use the last option (To make them play chess against one another for example), it is the most general option. Update only the fitness of the individuals, the pool will do the sorting and mutating for you.
+
+```js
+// stucture of the object for evaluation data:
+let evalObj = {
+    "updateMethod":"some_str",
+    "some_str":function(allIndiv){ ... }, // returns nothing.
+    "callback": false
+};
+// or
+let evalObj = {
+    "updateMethod":"some_str",
+    "some_str":function(allIndiv,callback){ ... }, // call callback when ready for async processing
+    "callback": true
+}; 
+```
 
 If you can easily evaluate the performance of an individual using some kind of function (If you want to train your agents to walk for example), use the middle option.
 
